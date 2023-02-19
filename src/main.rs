@@ -37,6 +37,7 @@ async fn run() -> Result<(), DbErr> {
         DbBackend::Sqlite => db,
     };
 
+    // Create
     let happy_bakery = bakery::ActiveModel {
         name: ActiveValue::Set("Happy Bakery".to_string()),
         profit_margin: ActiveValue::Set(0.0),
@@ -44,12 +45,46 @@ async fn run() -> Result<(), DbErr> {
     };
     let res = Bakery::insert(happy_bakery).exec(db).await?;
 
+    // Update
     let sad_bakery = bakery::ActiveModel {
         id: ActiveValue::Set(res.last_insert_id),
         name: ActiveValue::Set("Sad Bakery".to_string()),
         profit_margin: NotSet,
     };
     sad_bakery.update(db).await?;
+
+    let john = chef::ActiveModel {
+        name: ActiveValue::Set("John".to_string()),
+        bakery_id: ActiveValue::Set(1), // a foreign key
+        ..Default::default()
+    };
+    Chef::insert(john).exec(db).await?;
+
+    // Read
+    let bakeries:Vec<bakery::Model> = Bakery::find().all(db).await?;
+    println!("Bakeries: {:?}", bakeries);
+
+    let sad_bakery: Option<bakery::Model> = Bakery::find_by_id(1).one(db).await?;
+    assert_eq!(sad_bakery.unwrap().name, "Sad Bakery");
+
+    let sad_bakery: Option<bakery::Model> = Bakery::find()
+        .filter(bakery::Column::Name.eq("Sad Bakery"))
+        .one(db)
+        .await?;
+    assert_eq!(sad_bakery.unwrap().id, 1);
+
+    // Delete
+    let john = chef::ActiveModel {
+        id: ActiveValue::Set(1), // The primary key must be set
+        ..Default::default()
+    };
+    john.delete(db).await?;
+
+    let sad_bakery = bakery::ActiveModel {
+        id: ActiveValue::Set(1), // The primary key must be set
+        ..Default::default()
+    };
+    sad_bakery.delete(db).await?;
 
     Ok(())
 }
